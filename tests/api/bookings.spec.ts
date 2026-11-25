@@ -102,8 +102,8 @@ function expectBooking(value: unknown, expected: Booking): void {
   for (const [key, date] of Object.entries(expected.bookingdates)) {
     expect(field(dates, key) === date, `bookingdates.${key} matches`).toBe(true);
   }
-  const { bookingdates, ...fields } = expected;
-  for (const [key, expectedValue] of Object.entries(fields)) {
+  for (const [key, expectedValue] of Object.entries(expected)) {
+    if (key === 'bookingdates') continue;
     expect(field(value, key) === expectedValue, `${key} matches`).toBe(true);
   }
 }
@@ -117,6 +117,7 @@ function requireBaseURL(baseURL: string | undefined): string {
   return baseURL;
 }
 
+/* eslint-disable playwright/no-conditional-in-test -- Validate server-returned values before using them and only clean up a confirmed owned booking ID. */
 test('AC-10 owns a booking through create, update, read and delete', async ({ baseURL }, testInfo) => {
   const url = requireBaseURL(baseURL);
   const submitted: Booking = {
@@ -134,6 +135,7 @@ test('AC-10 owns a booking through create, update, read and delete', async ({ ba
     bookingdates: { ...submitted.bookingdates, checkout: '2031-06-04' },
     additionalneeds: 'Breakfast',
   };
+
   const token = await test.step('Auth: 200 and a usable demo token', async () => {
     const reply = await send(url, 'POST', '/auth', 200, {
       username: demoUsername,
@@ -179,19 +181,24 @@ test('AC-10 owns a booking through create, update, read and delete', async ({ ba
       ownedPath = `/booking/${id}`;
       expectBooking(field(result, 'booking'), submitted);
     });
+
     const path = ownedPath;
     if (!path) throw new Error('No owned booking path was captured');
+
     await test.step('PUT: 200 and updated fields', async () => {
       const reply = await send(url, 'PUT', path, 200, updated, `token=${token}`);
       expect(reply.status).toBe(200);
       expectBooking(parseJson(reply, 'Update'), updated);
     });
+
     await test.step('Persistence GET: 200 and stored updates', async () => {
       const reply = await send(url, 'GET', path, 200);
       expect(reply.status).toBe(200);
       expectBooking(parseJson(reply, 'Persistence GET'), updated);
     });
+
     await test.step('DELETE: 201 for the owned booking', () => remove(path));
+
     await test.step('Absence GET: 404 for the deleted booking', async () => {
       const reply = await send(url, 'GET', path, undefined);
       expect(reply.status).toBe(404);
@@ -214,6 +221,7 @@ test('AC-10 owns a booking through create, update, read and delete', async ({ ba
     throw error;
   }
 });
+/* eslint-enable playwright/no-conditional-in-test */
 
 test('AC-11 rejects one incorrect demo password without issuing a token', async ({ baseURL }, testInfo) => {
   const reply = await send(requireBaseURL(baseURL), 'POST', '/auth', 200, {

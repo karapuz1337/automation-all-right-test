@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      HUSKY: '0'
       npm_config_cache: ${{ github.workspace }}/.runtime/npm-cache
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.runtime/browsers
       PW_OUTPUT_DIR: ${{ github.workspace }}/.runtime/test-results
@@ -38,12 +39,21 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
       - name: Install Chromium and system dependencies
         run: npx --no-install playwright install --with-deps chromium
 
       - name: Run both Playwright projects
         id: tests
+        env:
+          PW_JOB_SUMMARY_FILE: ${{ github.workspace }}/.runtime/playwright-summary.md
         run: npx --no-install playwright test
+
+      - name: Publish Playwright job summary
+        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') && hashFiles('.runtime/playwright-summary.md') != '' }}
+        run: cat .runtime/playwright-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Playwright HTML report
         if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') && hashFiles('.runtime/playwright-report/index.html') != '' }}

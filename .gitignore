@@ -3,6 +3,7 @@
 /.factory/
 /test-results/
 /playwright-report/
+/playwright-report.zip
 /.env
 /.env.*
 !/.env.example

@@ -12,12 +12,15 @@ Use Node.js 24 LTS with npm. The first install needs internet access to download
 node --version
 npm --version
 npm ci
+npm run lint
 npm run typecheck
 npx --no-install playwright install chromium
 npm test
 ```
 
 On a Linux machine missing browser dependencies, use `npx --no-install playwright install --with-deps chromium` instead. The suite uses public demo credentials and synthetic data; no secrets or `.env` file are needed.
+
+ESLint checks TypeScript and Playwright tests. Run `npm run lint:fix` for supported automatic fixes. In a Git clone, `npm ci` installs the Husky pre-commit hook, which runs lint before each commit. CI runs lint explicitly.
 
 ```sh
 npm test -- --project=ui
@@ -53,9 +56,9 @@ On November 25, 2026, independent QA verified the corrected suite from a clean s
 
 ## GitHub Actions report
 
-The push workflow is designed to run both projects and upload the HTML report as `playwright-report` when a test run produces it, including after a test failure. In the repository's [Actions tab](https://github.com/karapuz1337/automation-all-right-test/actions), open the run for the commit you want to review, download `playwright-report` from **Artifacts**, and extract the full archive before opening `index.html`.
+Open the run for your commit in the repository's [Actions tab](https://github.com/karapuz1337/automation-all-right-test/actions). The **Summary** shows project counts and per-test statuses without a download. For full Playwright details, download `playwright-report` from **Artifacts**, extract the whole archive, and open `index.html` or run `npx --no-install playwright show-report <extracted-directory>`. GitHub packages artifacts as ZIP files and may require sign-in to download them.
 
-CI has not yet been triggered for this suite. The hosted result and downloadable report are still unverified.
+When tests generate results, the workflow publishes the summary and HTML artifact after either a pass or a failure. The HTML report omits Git commit and diff metadata.
 
 ## Product defects
 

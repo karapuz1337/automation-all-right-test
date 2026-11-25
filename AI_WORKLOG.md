@@ -25,13 +25,15 @@ These are short, verbatim excerpts from the worker task briefs. Surrounding text
 
 ## Verification
 
-Independent QA verified a clean lockfile install, type checking, discovery of both projects, and 12 passes in the corrected full run on Node 24 (9 UI, 3 API, no failures, skips, or retries). AC-12 passed in isolation after the fix; the other 11 isolated passes came from the prior QA round and their tests and configuration were unchanged. QA opened the full HTML report in Chromium. No product bugs were confirmed. CI has not yet been triggered; the hosted run and report download are pending.
+Independent QA verified a clean lockfile install, type checking, discovery of both projects, and 12 passes in the corrected full run on Node 24 (9 UI, 3 API, no failures, skips, or retries). AC-12 passed in isolation after the fix; the other 11 isolated passes came from the prior QA round and their tests and configuration were unchanged. QA opened the full HTML report in Chromium. No product bugs were confirmed.
+
+The [initial feature-branch CI run](https://github.com/karapuz1337/automation-all-right-test/actions/runs/45596242171) succeeded. The downloaded report matched the artifact digest and showed all 12 passes. Inspecting its embedded data exposed Git identity metadata, so the report configuration now explicitly omits commit and diff metadata. The follow-up also adds TypeScript/Playwright linting and a GitHub Actions run summary.
 
 ## Time and AI usage
 
 Manual estimate for the same core automation without AI: **185–280 minutes**. This is a sequential estimate, not measured time. It covers setup (20–30 min), UI (55–80), API (35–50), CI (20–35), docs and review (35–50), and delivery (20–35). It excludes the bonus and does not count initial discovery and planning as core execution.
 
-The table lists measured task intervals unless marked as worker session time (first to last recorded message). Setup overlapped with local tooling; UI and API implementation, CI, and the docs draft also overlapped. Don't add these intervals to calculate the core wall clock. The separate clock started at plan approval; final core elapsed time and hosted delivery are still pending. The pre-core interval includes discovery, plan review, and stopped partial setup; initial planning time was not captured.
+The table lists measured task intervals unless marked as worker session time (first to last recorded message). Setup overlapped with local tooling; UI and API implementation, CI, and the docs draft also overlapped. Don't add these intervals to calculate elapsed wall time. The initial hosted run succeeded **32m 52s after plan approval**. Report review and follow-up changes are recorded separately below. The pre-core interval includes discovery, plan review, and stopped partial setup; initial planning time was not captured.
 
 Token columns show observed worker counters. Grouped rows sum recorded counters only; they are not billing totals. Coordinator tokens are not reliably attributed. Worker counters are available for documentation finalization, but its elapsed time was not verified.
 
@@ -51,3 +53,6 @@ Token columns show observed worker counters. Grouped rows sum recorded counters 
 | CI workflow draft | 1m 31s | 280 | 5,380 | 35,516 | 349,589 | 953 |
 | Documentation draft | 58s | 200 | 4,434 | 39,239 | 267,331 | 206 |
 | Documentation finalization | Not verified | 220 | 5,450 | 36,315 | 288,983 | 273 |
+| Hosted report verification | 2m 13s | 340 | 9,570 | 40,702 | 480,665 | 840 |
+| TypeScript/Playwright lint and pre-commit | 3m 03s | 420 | 9,172 | 46,683 | 649,530 | 946 |
+| GitHub Actions summary | 1m 52s | 360 | 7,978 | 37,902 | 432,903 | 820 |

@@ -6,12 +6,20 @@
     "node": "24.x"
   },
   "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "npm run lint -- --fix",
+    "prepare": "husky",
     "test": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.1",
     "@types/node": "24.10.1",
-    "typescript": "6.0.3"
+    "eslint": "10.15.0",
+    "eslint-plugin-playwright": "2.12.2",
+    "husky": "9.1.7",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.74.0"
   }
 }
