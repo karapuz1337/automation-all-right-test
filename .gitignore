@@ -1,0 +1,8 @@
+/node_modules/
+/.runtime/
+/.factory/
+/test-results/
+/playwright-report/
+/.env
+/.env.*
+!/.env.example

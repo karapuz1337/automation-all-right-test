@@ -1,0 +1,55 @@
+name: Playwright
+
+on: push
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      npm_config_cache: ${{ github.workspace }}/.runtime/npm-cache
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.runtime/browsers
+      PW_OUTPUT_DIR: ${{ github.workspace }}/.runtime/test-results
+      PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/.runtime/playwright-report
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure job temp directory
+        run: |
+          mkdir -p "$PWD/.runtime/tmp"
+          printf 'TMPDIR=%s\n' "$PWD/.runtime/tmp" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Install Chromium and system dependencies
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Run both Playwright projects
+        id: tests
+        run: npx --no-install playwright test
+
+      - name: Upload Playwright HTML report
+        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') && hashFiles('.runtime/playwright-report/index.html') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: .runtime/playwright-report/
+          if-no-files-found: error
+          retention-days: 14

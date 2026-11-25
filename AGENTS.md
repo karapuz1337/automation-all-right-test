@@ -1,0 +1,7 @@
+# Agent instructions
+
+- Keep `ui` (AC-01–09) and `api` (AC-10–12) separate. Give each test an acceptance ID and make it runnable alone. Use fresh Playwright contexts, explicit setup and assertions, stable locators, and Playwright's built-in waits. Do not rely on another test's login, cart, or booking.
+- Use synthetic data and documented public demo credentials. Only update, delete, or clean up the validated ID returned by the current test's successful create. If creation is ambiguous and no ID was recovered, report it; do not search for a cleanup target or retry the write. Keep cleanup bounded and preserve the original failure in the report.
+- Assert the expected validation behavior, not just any failure. Treat timeouts, rate limits, and service errors separately. Never include issued tokens, cookies, raw auth payloads, private credentials, or personal data in logs, reports, or examples.
+- For independent verification, install from the lockfile on Node 24, type-check, list discovery per project, run each affected ID alone, then run the full suite. For example: `npm test -- --project=ui --grep '\bAC-08\b'`. Record what actually ran and preserve the report. Do not treat a local run as evidence of a hosted push run.
+- Stay within the assigned scope. Do not publish changes without approval or add optional bonus work to the core suite. Local adapted hooks and agent definitions are untracked under `.factory/`; they are not prerequisites for running the suite.
