@@ -4,7 +4,7 @@ The generator sends a plain-text case to `droid exec`. The model returns a struc
 
 ## 1. Set up
 
-From the repository root on `feat/playwright-test-generator`, use Node 24 and follow [Review in a visible browser](../README.md#review-in-a-visible-browser) to install Playwright and Chromium. Sign in to Droid and make sure `droid --version` works in the same terminal.
+Run the commands from the repository root with Node 24. Sign in to Droid and check that `droid --version` works in the same terminal. To run the generated specs, follow [Review in a visible browser](../README.md#review-in-a-visible-browser) to install Playwright and Chromium.
 
 Use synthetic cases only. The generator sends the case text to the configured model. Its scratch files live under `.runtime/bonus-provider`, but Droid may save case text in the configured Factory home and load repository configuration. The generator disables user, project, and plugin hooks for its one-shot child process only so workflow hooks do not prompt for extra turns. Organization-managed hooks still apply. No global settings are changed.
 
@@ -22,28 +22,19 @@ Expected result:
 The cart shows the Sauce Labs Bike Light and the cart badge shows 1.
 ```
 
-Supported cases: standard-user sign-in and inventory visibility; catalog names and prices; adding exactly one product and checking the cart; or submitting checkout with the postal code empty and checking the validation error. For cart and checkout, name one supported product: Sauce Labs Backpack, Sauce Labs Bike Light, or Sauce Labs Bolt T-Shirt. Other sites, sort/filter actions, multiple items, custom form values, and completing checkout are not supported.
+The generator supports four cases: confirming that standard-user sign-in opens the inventory, checking catalog names and prices, checking that one product appears in the cart, and confirming that checkout rejects an empty postal code. For cart and checkout cases, name one supported product: Sauce Labs Backpack, Sauce Labs Bike Light, or Sauce Labs Bolt T-Shirt. The generator does not support other sites, sorting or filtering, multiple items, custom form values, or completing checkout.
 
 ## 3. Generate, review and run
 
-Try the bundled Bike Light input, or replace its path with your own `.txt` file:
+Run this in your project terminal from the repository root. Replace the example path with your own `.txt` file. Keep the quotes if the path contains spaces.
 
-```powershell
-$name = 'bike-' + (Get-Date -Format yyyyMMddHHmmss)
-node bonus/generate.ts bonus/examples/cart-bike-light.txt $name
-Get-Content -LiteralPath ".runtime/bonus-generated/generated-$name.spec.ts"
+```sh
+npm run generate-test-case -- "bonus/examples/cart-bike-light.txt"
 ```
 
-Compare the generated actions and assertions with the text case. Then run just that spec:
+No PowerShell script, alias, or global installation is needed. The command saves a new `.spec.ts` under `.runtime/bonus-generated/` and prints its path. Open it in your editor and compare the actions and assertions with your text case. If they match, copy the `After reviewing, run:` command printed in the terminal to run just that spec in Chromium. Remove `--headed` from that command to run without a visible browser.
 
-```powershell
-$filter = [regex]::Escape("generated-$name.spec.ts") + '$'
-node node_modules/playwright/cli.js test -c bonus/playwright.config.ts --headed $filter
-```
-
-Omit `--headed` to run without a visible browser. Omit the output name from `node bonus/generate.ts <case.txt> [name]` to print TypeScript instead of saving. Names start with a lowercase letter or digit, may also contain hyphens, and are limited to 40 characters. Existing files are never overwritten.
-
-If the generator rejects the case, check the headings and supported steps. If it cannot start Droid, check installation, sign-in, and model access. If the generated assertions do not match your case, do not run them; clarify the input and generate again under a fresh name.
+If the generator rejects the case, check the headings and supported steps. If it cannot start Droid, check installation, sign-in, and model access. If the assertions do not match, do not run the spec. Clarify the input and rerun the same command. Each run generates a fresh filename without overwriting earlier specs.
 
 ## Verified examples
 
@@ -53,26 +44,15 @@ If the generator rejects the case, check the headings and supported steps. If it
 | [`cart-bike-light.txt`](examples/cart-bike-light.txt) | Add a Sauce Labs Bike Light and check the cart shows that product with a badge count of one. | [`generated-cart-bike-light.spec.ts`](examples/generated-cart-bike-light.spec.ts) | Pass | None |
 | [`postal-code-required.txt`](examples/postal-code-required.txt) | Add a Sauce Labs Backpack, start checkout, and submit with a blank postal code. The information form stays open and shows `Error: Postal Code is required`. | [`generated-postal-code-required.spec.ts`](examples/generated-postal-code-required.spec.ts) | Pass | Corrected the generator prompt, not the spec |
 
-The original checkout prompt led the model to emit a placeholder instead of a product action. The prompt now uses a concrete `add:backpack` example. All three saved specs match the regenerated files byte for byte; no generated TypeScript was edited by hand. The three fresh files passed together in one headed Chromium run (`3 passed`, 3.5 s reported by Playwright).
+The original checkout prompt led the model to emit a placeholder instead of a product action. The prompt now uses `add:backpack` as an example. No generated TypeScript was edited by hand. On November 26, 2026, the generator reproduced all three saved specs byte for byte, and all three passed together in headed Chromium (`3 passed`, 4.2 s).
 
-The default Playwright config does not discover these specs. The bonus config runs generated files under `.runtime/bonus-generated`, not the saved examples linked above. Named generation never overwrites a file; use a fresh tag if rerunning.
+Try the other two cases with the same command:
+
+```sh
+npm run generate-test-case -- "bonus/examples/catalog.txt"
+npm run generate-test-case -- "bonus/examples/postal-code-required.txt"
+```
+
+The default Playwright config does not discover these specs. The bonus config runs generated files under `.runtime/bonus-generated`, not the saved examples linked above.
 
 For offline checks, run `node --test bonus/generator.test.ts` and `npm run typecheck -- --project bonus/tsconfig.json`. Neither command calls Droid or opens a browser.
-
-```powershell
-$tag = Get-Date -Format yyyyMMddHHmmss
-node bonus/generate.ts bonus/examples/catalog.txt "$tag-catalog"
-node bonus/generate.ts bonus/examples/cart-bike-light.txt "$tag-cart-bike-light"
-node bonus/generate.ts bonus/examples/postal-code-required.txt "$tag-postal"
-
-# Compare each generated file with its input before running the tests.
-$files = @("generated-$tag-catalog.spec.ts", "generated-$tag-cart-bike-light.spec.ts", "generated-$tag-postal.spec.ts")
-$files | ForEach-Object { Get-Content -LiteralPath ".runtime/bonus-generated/$_" }
-```
-
-Once all three files have been generated and reviewed, run just those files:
-
-```powershell
-$filters = $files | ForEach-Object { [regex]::Escape($_) + '$' }
-node node_modules/playwright/cli.js test -c bonus/playwright.config.ts --headed @filters
-```

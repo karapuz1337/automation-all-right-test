@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { constants, lstatSync, mkdirSync, openSync, closeSync, fstatSync, readSync, writeFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { askModel } from './provider.ts';
 import { maxCaseBytes, parsePlan, renderTest, validateCase } from './plan.ts';
@@ -72,32 +73,40 @@ function saveTest(relative: string, source: string): void {
   }
 }
 
-const usage = `Usage: node bonus/generate.ts <case.txt> [name]
+const usage = `Usage: npm run generate-test-case -- <case.txt>
+       node bonus/generate.ts <case.txt> [name]
 Input: plain UTF-8 with nonempty Steps: and Expected result: sections (optional Title: first).
 Use only synthetic SauceDemo cases; input is sent to the configured Droid model.
-Without name, prints TypeScript to stdout. With name (lowercase letters, digits and hyphens;
-1-40 characters), creates .runtime/bonus-generated/generated-<name>.spec.ts without overwriting.
+The npm command saves a new spec under .runtime/bonus-generated and prints its path.
+The direct Node command prints TypeScript without a name, or saves it with a name of up
+to 40 lowercase letters, digits and hyphens, starting with a letter or digit.
 Provider scratch is under .runtime/bonus-provider. Droid still uses its configured
 Factory home for native session data and may discover repository configuration.
 The generated test is not run. Review it before running it with bonus/playwright.config.ts.`;
 
 function main(args: string[]): void {
+  const autoSave = args[0] === '--save';
+  if (autoSave) args = args.slice(1);
   if (args.length === 1 && args[0] === '--help') {
     console.log(usage);
     return;
   }
   const [input, name] = args;
-  if (!input || args.length > 2 || (name !== undefined && !/^[a-z0-9][a-z0-9-]{0,39}$/u.test(name))) {
+  if (!input || args.length > (autoSave ? 1 : 2) || (name !== undefined && !/^[a-z0-9][a-z0-9-]{0,39}$/u.test(name))) {
     throw new Error(usage);
   }
   const caseText = validateCase(readCaseFile(input));
-  const output = name === undefined ? undefined : outputPath(name);
+  const stem = basename(input, extname(input)).toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '').slice(0, 27) || 'case';
+  const outputName = autoSave ? `${stem}-${randomUUID().slice(0, 8)}` : name;
+  const output = outputName === undefined ? undefined : outputPath(outputName);
   const source = renderTest(parsePlan(askModel(caseText)));
   if (output === undefined) {
     process.stdout.write(source);
   } else {
     saveTest(output, source);
     console.log(`Created ${output} (not run).`);
+    console.log(`After reviewing, run: npm exec -- playwright test -c bonus/playwright.config.ts --headed "${basename(output).replaceAll('.', '[.]')}$"`);
   }
 }
 

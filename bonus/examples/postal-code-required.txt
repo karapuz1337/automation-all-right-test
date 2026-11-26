@@ -5,4 +5,4 @@ Steps:
 3. Open the shopping cart.
 4. Begin checkout.
 5. Fill in synthetic first and last names and submit the form without a postal code.
-Expected result: The postal code is required; checkout stays on the information form and shows the required error.
+Expected result: Checkout stays on the information form and shows `Error: Postal Code is required`.

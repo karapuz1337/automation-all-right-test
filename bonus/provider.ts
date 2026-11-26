@@ -101,7 +101,7 @@ export function readModelResult(raw: string): string {
 }
 
 export function askModel(caseText: string): string {
-  // This isolates app scratch, not Factory's session store or its config discovery.
+  // This isolates temporary files, not Factory's session store or configuration discovery.
   // The case is one data argument; do not enable a shell or inherit stdin.
   const child = withProviderScratch(root, (cwd, env): SpawnSyncReturns<string> => {
     // This child translates a case; it is not a coding session. Repository workflow
