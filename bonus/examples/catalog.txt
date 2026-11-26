@@ -1,0 +1,4 @@
+Title: Show catalog names and prices
+Steps:
+1. Open the public SauceDemo login page and sign in with the standard demo account.
+Expected result: The inventory page shows product cards with visible, non-empty names and prices in dollars and cents.

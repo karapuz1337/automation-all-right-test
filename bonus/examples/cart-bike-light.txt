@@ -1,0 +1,6 @@
+Title: Cart contains one Bike Light
+Steps:
+1. Open the public SauceDemo login page and sign in with the standard demo account.
+2. Add the Sauce Labs Bike Light to the cart.
+3. Open the shopping cart.
+Expected result: The cart shows one item, named Sauce Labs Bike Light.
