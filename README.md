@@ -20,7 +20,9 @@ npm test
 
 On a Linux machine missing browser dependencies, use `npx --no-install playwright install --with-deps chromium` instead. The suite uses public demo credentials and synthetic data; no secrets or `.env` file are needed.
 
-ESLint checks TypeScript and Playwright tests. Run `npm run lint:fix` for supported automatic fixes. In a Git clone, `npm ci` installs the Husky pre-commit hook, which runs lint before each commit. CI runs lint explicitly.
+ESLint checks TypeScript and Playwright tests. Run `npm run lint:fix` to apply supported fixes yourself. In a Git clone, `npm ci` installs the Husky pre-commit hook. The hook runs lint and TypeScript checks without editing or staging files. CI runs both checks explicitly.
+
+TypeScript targets ES2025, the latest fixed target supported by this project's compiler. The config type-checks without emitting JavaScript; Node 24 runs the suite. UI assertions use Playwright's default five-second retry budget, not a fixed sleep. AC-03 sets its polling timeout explicitly because `toPass` does not use the default assertion timeout.
 
 ```sh
 npm test -- --project=ui
@@ -31,6 +33,32 @@ npx --no-install playwright show-report .runtime/playwright-report
 
 The last command opens the most recent local HTML report at its default path. Run the full suite before opening it if you want results for both projects.
 
+## Review in a visible browser
+
+To keep the browser install, cache, and temporary files in this checkout, set these paths in PowerShell before installing or running:
+
+```powershell
+$runtime = Join-Path $PWD '.runtime'
+$tmp = Join-Path $runtime 'tmp'
+New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+$env:TEMP = $env:TMP = $env:TMPDIR = $tmp
+$env:npm_config_cache = Join-Path $runtime 'npm-cache'
+$env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $runtime 'browsers'
+$env:PLAYWRIGHT_TRANSFORM_CACHE_DIR = Join-Path $runtime 'transform-cache'
+npm ci
+npx --no-install playwright install chromium
+```
+
+Then choose a review mode:
+
+```powershell
+npm test -- --headed
+npm test -- --project=ui --grep 'AC-06' --debug
+npm test -- --ui
+```
+
+The first command runs all 13 core tests. Chromium opens for the 9 UI cases; API cases do not use a browser. The second opens Playwright Inspector for checkout. Use step-through to check what each action and assertion actually proves. The third opens an interactive test picker.
+
 ## Coverage
 
 | ID | Project | Behavior checked |
@@ -40,28 +68,53 @@ The last command opens the most recent local HTML report at its default path. Ru
 | AC-03 | UI | Low-to-high sorting puts at least two distinct prices in numeric order. |
 | AC-04 | UI | Adding a named product shows a cart badge of one and puts that exact product in the cart. |
 | AC-05 | UI | Removing that product empties the cart and clears the badge. |
-| AC-06 | UI | Checkout shows the selected product in the overview and confirms the order after Finish. |
+| AC-06 | UI | Checkout carries the cart price into the overview, shows a matching subtotal and a total equal to subtotal plus displayed tax, and confirms the order after Finish. |
 | AC-07 | UI | A wrong password shows an error and does not open inventory. |
 | AC-08 | UI | A blank username with the demo password shows the username-required error and does not open inventory. |
 | AC-09 | UI | Omitting only the postal code shows a validation error and does not open checkout overview. |
 | AC-10 | API | Authenticate, create a booking, update it, read back the changes, delete it, then verify that the same ID returns `404`. |
 | AC-11 | API | Incorrect demo credentials are rejected without issuing a usable token. |
 | AC-12 | API | A read-only request for an ID outside the positive booking ID range returns `404` with `Not Found`. |
+| AC-13 | API | A read-only booking search for a unique synthetic name returns HTTP `200` and an empty list. |
 
-Deliberately excluded: other SauceDemo profiles and browsers, exhaustive field permutations, invalid API writes, load and security testing, and the optional test-generation bonus. API writes are limited to a booking created by the current test.
+Deliberately excluded from the core suite: other SauceDemo profiles and browsers, exhaustive field permutations, invalid API writes, and load and security testing. API writes are limited to a booking created by the current test. The optional generator is maintained on the separate `feat/playwright-test-generator` branch and does not run in core CI.
 
 ## Verified locally
 
-On November 25, 2026, independent QA verified the corrected suite from a clean source snapshot on Node 24. The lockfile install and type check passed. One full run passed all 12 cases (9 UI, 3 API), with no failures, skips, or retries. Each case also passed in isolation across the two QA rounds; AC-01–11 were unchanged in the second round. The full HTML report was opened in Chromium.
+On November 25, 2026, the updated suite passed all 13 cases locally in a headed run (9 UI, 4 API). The final API rerun also passed all four cases. The earlier 12-case snapshot passed independently in a separate QA agent session and on [GitHub Actions](https://github.com/karapuz1337/automation-all-right-test/actions/runs/45603673186); that run predates AC-13.
 
 ## GitHub Actions report
 
 Open the run for your commit in the repository's [Actions tab](https://github.com/karapuz1337/automation-all-right-test/actions). The **Summary** shows project counts and per-test statuses without a download. For full Playwright details, download `playwright-report` from **Artifacts**, extract the whole archive, and open `index.html` or run `npx --no-install playwright show-report <extracted-directory>`. GitHub packages artifacts as ZIP files and may require sign-in to download them.
 
-When tests generate results, the workflow publishes the summary and HTML artifact after either a pass or a failure. The HTML report omits Git commit and diff metadata.
+When tests generate results, the workflow publishes the summary and HTML artifact after either a pass or a failure. UI failures include a screenshot. Local UI failures also retain a trace, which you can open from the local HTML report. CI does not record traces because they can contain browser state. API captures stay off; API status failures instead show the operation, HTTP status, and a safe response category without exposing raw headers or payloads. The HTML report omits Git commit and diff metadata.
 
-## Product defects
+## Product bugs
 
-No product defect was confirmed. The first AC-12 fixture assumed that a large positive booking ID was unused, but the read returned `200`. That exposed a mistake in fixture selection; QA did not diagnose why the API returned `200`. The corrected fixture uses `-1`, outside the positive ID range, and returned the expected `404` and `Not Found` in isolation and in the full run.
+### SD-01: Checkout accepts a postal code containing only spaces
 
-For any confirmed defect, record: title and affected case ID, environment and time, prerequisites and exact reproduction steps, expected result, actual result, and reproducible supporting evidence with credentials and personal data removed.
+- **Severity:** Low. Checkout validation lets a missing postal code through to the overview; order completion with that value was not tested.
+- **Environment:** Public SauceDemo, `standard_user`, headed Chromium on Windows, November 25, 2026.
+- **Steps:** Add Sauce Labs Backpack to the cart and start checkout. Enter `Demo` and `Tester` for the names. Leave the postal code empty and click **Continue** to confirm the required-field error. Enter three spaces in that field and click **Continue** again.
+- **Expected:** Stay on checkout information and show `Error: Postal Code is required`. Spaces alone do not provide a postal code.
+- **Actual:** The empty value was rejected. Three spaces advanced to checkout overview (`/checkout-step-two.html`). Reproduced twice in fresh browser contexts. The order was not submitted.
+
+The [reproduction test](tests/ui/checkout-postal-code.repro.spec.ts) asserts the expected behavior. It fails while the defect is present and is excluded from the default suite and CI.
+
+```powershell
+$env:PW_REPRO_SD_01 = '1'
+npm test -- --project=ui --headed
+Remove-Item Env:PW_REPRO_SD_01
+```
+
+## Test and API observations
+
+### AC-12: Missing-booking test used an ID not known to be absent
+
+- **Environment:** Public Restful Booker demo, November 25, 2026.
+- **Steps:** Send a read-only `GET /booking/2147483647` to the demo API. The original test assumed this ID did not exist.
+- **Expected:** `404 Not Found` for a known missing booking.
+- **Actual:** HTTP `200` in both the isolated test and the full suite. The test did not read the response body, so this does not prove the API mishandled a missing booking.
+- **Fix:** Use `GET /booking/-1`, outside the positive booking ID range. The corrected test got HTTP `404` and the body `Not Found`, alone and in the full suite.
+
+AC-11 is a separate API observation: a wrong demo password returned HTTP `200` with `Bad credentials` and no usable token. The test asserts that behavior; it is not evidence of an authentication bypass or a confirmed defect.

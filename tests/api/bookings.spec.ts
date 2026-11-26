@@ -1,126 +1,46 @@
 import { randomUUID } from 'node:crypto';
-import { request as httpsRequest } from 'node:https';
 import { expect, test } from '@playwright/test';
+import { BookerClient, field, jsonBody, type Booking } from './booker-client';
 
-const demoUsername = 'admin';
-const missingBookingId = -1; // Fixed read-only fixture outside the positive booking ID domain.
-const timeoutMs = 6_000;
-const safeTransportCodes = new Set([
-  'ABORT_ERR', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH',
-  'ENOTFOUND', 'ETIMEDOUT', 'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT',
-  'UNABLE_TO_GET_ISSUER_CERT', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
-  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-]);
-
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
-type Booking = {
-  firstname: string;
-  lastname: string;
-  totalprice: number;
-  depositpaid: boolean;
-  bookingdates: { checkin: string; checkout: string };
-  additionalneeds: string;
-};
-type Reply = { status: number; body?: string };
-
-function transportCode(error: unknown): string {
-  const code = field(error, 'code');
-  return typeof code === 'string' && safeTransportCodes.has(code) ? code : 'unknown';
+function expectStatus(response: { status: number; media: string }, expected: number, operation: string) {
+  const { status, media } = response;
+  const category = status === 429 ? 'rate limited'
+    : status >= 500 ? 'service error'
+      : status >= 300 && status < 400 ? 'redirect'
+        : 'response';
+  expect(status, `${operation}: ${category} (${media})`).toBe(expected);
 }
 
-// Transport exception: Playwright runs the tests, but native request failures can log
-// sensitive headers. Use bounded HTTPS with no redirects, session cookies or retries.
-function send(
-  baseURL: string,
-  method: Method,
-  path: string,
-  bodyStatus: number | undefined,
-  data?: object,
-  cookie?: string,
-): Promise<Reply> {
-  return new Promise((resolve, reject) => {
-    const fail = (error: unknown) =>
-      reject(new Error(`${method} ${path} transport failure (${transportCode(error)})`));
-    try {
-      const payload = data === undefined ? undefined : JSON.stringify(data);
-      const req = httpsRequest(new URL(path, baseURL), {
-        method,
-        agent: false,
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-          Accept: 'application/json',
-          ...(payload === undefined ? {} : {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload),
-          }),
-          ...(cookie === undefined ? {} : { Cookie: cookie }),
-        },
-      }, (res) => {
-        const status = res.statusCode ?? 0;
-        res.on('error', fail);
-        if (status !== bodyStatus) {
-          resolve({ status });
-          res.destroy();
-          return;
-        }
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk: string) => {
-          body += chunk;
-          if (body.length > 65_536) {
-            reject(new Error(`${method} ${path} returned an oversized response`));
-            res.destroy();
-          }
-        });
-        res.on('end', () => resolve({ status, body }));
-      });
-      req.on('error', fail);
-      req.end(payload);
-    } catch (error) {
-      fail(error);
-    }
-  });
-}
-
-function parseJson(reply: Reply, label: string): unknown {
-  try {
-    return JSON.parse(reply.body ?? '');
-  } catch {
-    throw new Error(`${label} did not return valid JSON`);
-  }
-}
-
-function field(value: unknown, key: string): unknown {
-  return typeof value === 'object' && value !== null && key in value
-    ? (value as Record<string, unknown>)[key]
-    : undefined;
-}
-
-function expectBooking(value: unknown, expected: Booking): void {
-  const dates = field(value, 'bookingdates');
-  expect(dates !== null && typeof dates === 'object', 'bookingdates is an object').toBe(true);
-  for (const [key, date] of Object.entries(expected.bookingdates)) {
-    expect(field(dates, key) === date, `bookingdates.${key} matches`).toBe(true);
-  }
-  for (const [key, expectedValue] of Object.entries(expected)) {
-    if (key === 'bookingdates') continue;
-    expect(field(value, key) === expectedValue, `${key} matches`).toBe(true);
-  }
-}
-
-function isNonemptyString(value: unknown): value is string {
+function isUsableToken(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function requireBaseURL(baseURL: string | undefined): string {
-  if (!baseURL) throw new Error('API project baseURL is required');
-  return baseURL;
+function expectBooking(actual: unknown, expected: Booking) {
+  // Compare fields without dumping a raw server payload on failure.
+  const dates = field(actual, 'bookingdates');
+  expect(field(dates, 'checkin') === expected.bookingdates.checkin, 'Check-in date matches').toBe(true);
+  expect(field(dates, 'checkout') === expected.bookingdates.checkout, 'Checkout date matches').toBe(true);
+
+  for (const [name, value] of Object.entries(expected)) {
+    if (name !== 'bookingdates') {
+      expect(field(actual, name) === value, `${name} matches`).toBe(true);
+    }
+  }
 }
 
-/* eslint-disable playwright/no-conditional-in-test -- Validate server-returned values before using them and only clean up a confirmed owned booking ID. */
+function ownedBookingId(result: unknown): number {
+  const id = field(result, 'bookingid');
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+    throw new Error('Create did not return a positive safe-integer booking ID');
+  }
+  return id;
+}
+
+/* eslint-disable playwright/no-conditional-in-test -- Fall back to cleanup only for a known ID not yet deleted. */
+// eslint-disable-next-line playwright/expect-expect -- The steps assert status through expectStatus and compare booking fields.
 test('AC-10 owns a booking through create, update, read and delete', async ({ baseURL }, testInfo) => {
-  const url = requireBaseURL(baseURL);
-  const submitted: Booking = {
+  const booker = new BookerClient(baseURL);
+  const booking: Booking = {
     firstname: 'Synthetic',
     lastname: `QA-${randomUUID()}`,
     totalprice: 125,
@@ -129,93 +49,84 @@ test('AC-10 owns a booking through create, update, read and delete', async ({ ba
     additionalneeds: 'None',
   };
   const updated: Booking = {
-    ...submitted,
+    ...booking,
     totalprice: 155,
     depositpaid: true,
-    bookingdates: { ...submitted.bookingdates, checkout: '2031-06-04' },
+    bookingdates: { ...booking.bookingdates, checkout: '2031-06-04' },
     additionalneeds: 'Breakfast',
   };
 
-  const token = await test.step('Auth: 200 and a usable demo token', async () => {
-    const reply = await send(url, 'POST', '/auth', 200, {
-      username: demoUsername,
-      password: 'password123',
-    });
-    expect(reply.status).toBe(200);
-    const candidate = field(parseJson(reply, 'Auth'), 'token');
-    const usable = isNonemptyString(candidate);
-    expect(usable, 'usable demo token').toBe(true);
-    if (!usable) throw new Error('Auth did not return a usable demo token');
-    return candidate;
+  const token = await test.step('Authenticate as the demo user', async () => {
+    const response = await booker.authenticate('password123');
+    expectStatus(response, 200, 'POST /auth');
+
+    const token = field(jsonBody(response, 'Auth'), 'token');
+    if (!isUsableToken(token)) throw new Error('Auth did not return a usable demo token');
+    return token;
   });
 
-  let ownedPath: string | undefined;
+  let createdId: number | undefined;
   let deleteAttempted = false;
-  const remove = async (path: string) => {
-    deleteAttempted = true;
-    const reply = await send(url, 'DELETE', path, undefined, undefined, `token=${token}`).catch((error: unknown) => {
-      testInfo.annotations.push({
-        type: 'cleanup',
-        description: 'DELETE transport failed; outcome unconfirmed. No retry of a potentially applied write.',
-      });
+  const noteCleanup = (description: string) => {
+    testInfo.annotations.push({ type: 'cleanup', description });
+  };
+  const deleteBooking = async (id: number) => {
+    deleteAttempted = true; // Do not retry a DELETE that may already have taken effect.
+    let response;
+    try {
+      response = await booker.remove(id, token);
+    } catch (error) {
+      noteCleanup('DELETE transport failed; removal was not confirmed. No retry.');
       throw error;
-    });
-    if (reply.status !== 201) {
-      testInfo.annotations.push({
-        type: 'cleanup',
-        description: `DELETE returned HTTP ${reply.status}, not 201; removal not confirmed. No retry.`,
-      });
     }
-    expect(reply.status).toBe(201);
+    if (response.status !== 201) {
+      noteCleanup(`DELETE returned HTTP ${response.status}, not 201; removal was not confirmed. No retry.`);
+    }
+    expectStatus(response, 201, 'DELETE booking');
   };
 
   try {
-    await test.step('Create: 200, owned booking ID and submitted fields', async () => {
-      const reply = await send(url, 'POST', '/booking', 200, submitted);
-      expect(reply.status).toBe(200);
-      const result = parseJson(reply, 'Create');
-      const id = field(result, 'bookingid');
-      if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
-        throw new Error('Create did not return a positive safe-integer booking ID');
-      }
-      ownedPath = `/booking/${id}`;
-      expectBooking(field(result, 'booking'), submitted);
+    const id = await test.step('Create a booking and check the submitted details', async () => {
+      const response = await booker.create(booking);
+      expectStatus(response, 200, 'POST /booking');
+
+      const result = jsonBody(response, 'Create');
+      createdId = ownedBookingId(result);
+      expectBooking(field(result, 'booking'), booking);
+      return createdId;
     });
 
-    const path = ownedPath;
-    if (!path) throw new Error('No owned booking path was captured');
-
-    await test.step('PUT: 200 and updated fields', async () => {
-      const reply = await send(url, 'PUT', path, 200, updated, `token=${token}`);
-      expect(reply.status).toBe(200);
-      expectBooking(parseJson(reply, 'Update'), updated);
+    await test.step('Update the booking', async () => {
+      const response = await booker.update(id, updated, token);
+      expectStatus(response, 200, 'PUT booking');
+      expectBooking(jsonBody(response, 'Update'), updated);
     });
 
-    await test.step('Persistence GET: 200 and stored updates', async () => {
-      const reply = await send(url, 'GET', path, 200);
-      expect(reply.status).toBe(200);
-      expectBooking(parseJson(reply, 'Persistence GET'), updated);
+    await test.step('Read the booking and check the saved changes', async () => {
+      const response = await booker.get(id, 200);
+      expectStatus(response, 200, 'GET updated booking');
+      expectBooking(jsonBody(response, 'Get'), updated);
     });
 
-    await test.step('DELETE: 201 for the owned booking', () => remove(path));
+    await test.step('Delete the booking', async () => {
+      await deleteBooking(id);
+    });
 
-    await test.step('Absence GET: 404 for the deleted booking', async () => {
-      const reply = await send(url, 'GET', path, undefined);
-      expect(reply.status).toBe(404);
+    await test.step('Check that the deleted booking returns 404', async () => {
+      const response = await booker.get(id);
+      expectStatus(response, 404, 'GET deleted booking');
     });
   } catch (error) {
-    if (!ownedPath) {
-      testInfo.annotations.push({
-        type: 'cleanup',
-        description: 'Create did not yield an owned ID; outcome unconfirmed. No lookup, retry or cleanup attempted.',
-      });
+    const id = createdId;
+    if (id === undefined) {
+      noteCleanup('Create did not yield an owned ID; outcome unconfirmed. No lookup, retry or cleanup attempted.');
     } else if (!deleteAttempted) {
-      const path = ownedPath;
       try {
-        await test.step('Cleanup: DELETE only the owned booking', () => remove(path));
+        await test.step('Clean up the booking created by this test', async () => {
+          await deleteBooking(id);
+        });
       } catch {
-        // The step and annotation record the cleanup failure without replacing the primary error.
-        console.warn('Cleanup did not confirm removal of the owned booking; no retry.');
+        // The failed step and annotation record cleanup without masking the original error.
       }
     }
     throw error;
@@ -224,14 +135,14 @@ test('AC-10 owns a booking through create, update, read and delete', async ({ ba
 /* eslint-enable playwright/no-conditional-in-test */
 
 test('AC-11 rejects one incorrect demo password without issuing a token', async ({ baseURL }, testInfo) => {
-  const reply = await send(requireBaseURL(baseURL), 'POST', '/auth', 200, {
-    username: demoUsername,
-    password: 'incorrect-demo-password',
-  });
-  expect(reply.status).toBe(200);
-  const result = parseJson(reply, 'Auth rejection');
-  expect(field(result, 'reason') === 'Bad credentials', 'bad-credentials marker').toBe(true);
-  expect(isNonemptyString(field(result, 'token')), 'no usable token').toBe(false);
+  const booker = new BookerClient(baseURL);
+
+  const response = await booker.authenticate('incorrect-demo-password');
+  expectStatus(response, 200, 'POST /auth with incorrect credentials');
+
+  const result = jsonBody(response, 'Auth rejection');
+  expect(field(result, 'reason') === 'Bad credentials', 'Bad credentials marker').toBe(true);
+  expect(isUsableToken(field(result, 'token')), 'No usable token').toBe(false);
   testInfo.annotations.push({
     type: 'observation',
     description: 'HTTP 200, Bad credentials marker, no usable token.',
@@ -239,7 +150,19 @@ test('AC-11 rejects one incorrect demo password without issuing a token', async 
 });
 
 test('AC-12 returns 404 for the read-only missing-ID fixture', async ({ baseURL }) => {
-  const reply = await send(requireBaseURL(baseURL), 'GET', `/booking/${missingBookingId}`, 404);
-  expect(reply.status).toBe(404);
-  expect(reply.body === 'Not Found', '404 has the not-found marker rather than a booking payload').toBe(true);
+  const booker = new BookerClient(baseURL);
+
+  const response = await booker.get(-1, 404); // Outside the positive booking ID range.
+  expectStatus(response, 404, 'GET missing booking');
+  expect(response.body === 'Not Found', 'Not-found marker').toBe(true);
+});
+
+test('AC-13 returns an empty list for a booking search with no matching name', async ({ baseURL }) => {
+  const booker = new BookerClient(baseURL);
+
+  const response = await booker.findByName('Synthetic', `NoMatch-${randomUUID()}`);
+  expectStatus(response, 200, 'GET /booking with name filters');
+
+  const matches = jsonBody(response, 'Booking search');
+  expect(Array.isArray(matches) ? matches.length : 'not an array', 'Number of matching bookings').toBe(0);
 });

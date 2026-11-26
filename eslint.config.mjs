@@ -4,8 +4,18 @@ import playwright from 'eslint-plugin-playwright';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores(['.factory/', '.runtime/', 'playwright-report/', 'test-results/']),
+  globalIgnores(['.factory/', '.husky/', '.runtime/', 'playwright-report/', 'test-results/', 'blob-report/']),
   js.configs.recommended,
+  {
+    rules: {
+      'no-var': 'error',
+      'prefer-const': 'error',
+      'prefer-arrow-callback': 'error',
+      'object-shorthand': 'error',
+      'prefer-template': 'error',
+      'prefer-promise-reject-errors': 'error',
+    },
+  },
   {
     files: ['**/*.ts'],
     extends: [tseslint.configs.recommended],
@@ -25,6 +35,7 @@ export default defineConfig(
     extends: [playwright.configs['flat/recommended']],
     rules: {
       'playwright/no-wait-for-timeout': 'error',
+      'playwright/no-focused-test': 'error',
     },
   },
 );

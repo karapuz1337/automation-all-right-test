@@ -17,15 +17,17 @@ These are short, verbatim excerpts from the worker task briefs. Surrounding text
 
 | Mistake | How it was caught and corrected |
 | --- | --- |
-| Discovery treated the client-rendered API contract as blocked. | The discovery handoff noted that the researcher could not read the docs page. A follow-up retrieved its published `apidoc/api_data.js` with HTTP `200` and recovered the documented endpoints. Negative responses still required live evidence. |
-| The early design changed AC-08 from a blank username to a blank password. | Comparing the design's UI list with the agreed case exposed the mismatch. The revised plan restored a blank username with the demo password and required the username-specific error without advancing to inventory. |
-| The first plan made 12 intentional throws a gate for implementation. | Plan review pointed out that a thrown placeholder never exercised product behavior. The replacement verified setup, then ran stock Playwright discovery with no specs and recorded the expected `No tests found` result. That was a setup baseline, not a product failure. |
 | The first AC-03 assertion read prices immediately after selecting the sort, including hidden entries. | Code review found it could pass without proving the visible catalog was sorted. The corrected assertion waits for visible prices to be in numeric order, with at least two distinct values. |
 | AC-12 assumed a large positive ID was unused in the shared demo. | Independent QA got `200` both in isolation and in the first full run. The test discarded the unexpected body; the reason for the response was not diagnosed. A fixed ID outside the positive range returned `404` with `Not Found` without weakening either assertion. This was a test design mistake, not a confirmed product bug. |
+| The first API spec mixed HTTP transport, token handling, cleanup, and the booking scenario in one file. | The author compared it with the UI suite and their own Playwright project, pointed out that it was hard to read, and asked for `async`/`await`. The rewrite moved transport into `booker-client.ts` and left the API calls and assertions in the spec. |
+| UI failures lacked browser evidence. | The author asked to carry over fitting settings from their Playwright workspace and later explicitly asked for traces to make failures easier to analyze. UI failures now attach a screenshot and retain a local trace. API captures and CI traces remain off. |
+| AC-06 did not assert the checkout total. | The author requested a coverage review and called out checkout totals as a gap to close after the review flagged it. AC-06 now checks the cart price, subtotal, and total plus displayed tax arithmetic. |
+
+The author also questioned the explicit five-second assertion timeout. It duplicated Playwright's default and was removed; the sort test still needs its own `toPass` timeout.
 
 ## Verification
 
-Independent QA verified a clean lockfile install, type checking, discovery of both projects, and 12 passes in the corrected full run on Node 24 (9 UI, 3 API, no failures, skips, or retries). AC-12 passed in isolation after the fix; the other 11 isolated passes came from the prior QA round and their tests and configuration were unchanged. QA opened the full HTML report in Chromium. No product bugs were confirmed.
+Independent QA verified a clean lockfile install, type checking, discovery of both projects, and 12 passes in the corrected full run on Node 24 (9 UI, 3 API, no failures, skips, or retries). AC-12 passed in isolation after the fix; the other 11 isolated passes came from the prior QA round and their tests and configuration were unchanged. QA opened the full HTML report in Chromium. The original run did not confirm a product bug. Follow-up testing confirmed [SD-01](README.md#sd-01-checkout-accepts-a-postal-code-containing-only-spaces).
 
 The [initial feature-branch CI run](https://github.com/karapuz1337/automation-all-right-test/actions/runs/45596242171) succeeded. The downloaded report matched the artifact digest and showed all 12 passes. Inspecting its embedded data exposed Git identity metadata, so the report configuration now explicitly omits commit and diff metadata. The follow-up also adds TypeScript/Playwright linting and a GitHub Actions run summary.
 

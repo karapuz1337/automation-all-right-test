@@ -6,9 +6,9 @@ const summaryFile = process.env.PW_JOB_SUMMARY_FILE;
 export default defineConfig({
   testDir: './tests',
   workers: 1,
+  forbidOnly: !!process.env.CI,
   retries: 0,
   timeout: 60_000,
-  expect: { timeout: 5_000 },
   outputDir: process.env.PW_OUTPUT_DIR ?? '.runtime/test-results',
   captureGitInfo: { commit: false, diff: false },
   reporter: [
@@ -32,8 +32,15 @@ export default defineConfig({
     {
       name: 'ui',
       testDir: './tests/ui',
-      testMatch: 'saucedemo.spec.ts',
-      use: { browserName: 'chromium', baseURL: 'https://www.saucedemo.com' },
+      testMatch: process.env.PW_REPRO_SD_01 === '1'
+        ? 'checkout-postal-code.repro.spec.ts'
+        : 'saucedemo.spec.ts',
+      use: {
+        browserName: 'chromium',
+        baseURL: 'https://www.saucedemo.com',
+        screenshot: 'only-on-failure',
+        trace: process.env.CI ? 'off' : { mode: 'retain-on-failure', sources: false },
+      },
     },
     {
       name: 'api',

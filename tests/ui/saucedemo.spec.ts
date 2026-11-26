@@ -8,6 +8,10 @@ const product = 'Sauce Labs Backpack';
 const addBackpack = 'add-to-cart-sauce-labs-backpack';
 const priceFormat = /^\$\d+\.\d{2}$/;
 
+function cents(price: string): number {
+  return Number(price.replace(/\D/g, ''));
+}
+
 async function login(page: Page) {
   await page.goto('/');
   await page.getByTestId('username').fill(username);
@@ -88,10 +92,14 @@ test('AC-05 removing the product empties the cart and clears the badge', async (
   await expect(page.getByTestId('shopping-cart-badge')).toHaveCount(0);
 });
 
-test('AC-06 checkout shows the selected product and confirms the order after Finish', async ({ page }) => {
+test('AC-06 checkout shows the selected product and correct total, then confirms the order', async ({ page }) => {
   await login(page);
   await page.getByTestId(addBackpack).click();
   await page.getByTestId('shopping-cart-link').click();
+  const cartPrice = page.getByTestId('cart-list').getByTestId('inventory-item-price');
+  await expect(cartPrice).toHaveText(priceFormat);
+  const itemPrice = (await cartPrice.innerText()).trim();
+
   await page.getByTestId('checkout').click();
   await page.getByTestId('firstName').fill('Demo');
   await page.getByTestId('lastName').fill('Tester');
@@ -99,9 +107,17 @@ test('AC-06 checkout shows the selected product and confirms the order after Fin
   await page.getByTestId('continue').click();
 
   await expect(page).toHaveURL('/checkout-step-two.html');
-  const overviewItem = page.getByTestId('cart-list').getByTestId('inventory-item-name');
-  await expect(overviewItem).toBeVisible();
-  await expect(overviewItem).toHaveText(product);
+  const overview = page.getByTestId('cart-list');
+  await expect(overview.getByTestId('inventory-item-name')).toBeVisible();
+  await expect(overview.getByTestId('inventory-item-name')).toHaveText(product);
+  await expect(overview.getByTestId('inventory-item-price')).toHaveText(itemPrice);
+  await expect(page.getByTestId('subtotal-label')).toHaveText(`Item total: ${itemPrice}`);
+  const tax = page.getByTestId('tax-label');
+  const total = page.getByTestId('total-label');
+  await expect(tax).toHaveText(/^Tax: \$\d+\.\d{2}$/);
+  await expect(total).toHaveText(/^Total: \$\d+\.\d{2}$/);
+  expect(cents(await total.innerText()), 'Total equals the item price plus displayed tax')
+    .toBe(cents(itemPrice) + cents(await tax.innerText()));
   await page.getByTestId('finish').click();
 
   await expect(page).toHaveURL('/checkout-complete.html');

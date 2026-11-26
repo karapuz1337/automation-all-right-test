@@ -46,7 +46,7 @@ export default class JobSummaryReporter implements Reporter {
       const project = name === 'ui' || name === 'api' ? name : 'Other';
       const cases = suite.allTests().map(test => ({
         // Emit only the bounded acceptance ID, never arbitrary titles or result payloads.
-        id: /^AC-(?:0[1-9]|1[0-2])\b/.exec(test.title)?.[0] ?? 'Unlabeled case',
+        id: /^AC-(?:0[1-9]|1[0-3])\b/.exec(test.title)?.[0] ?? 'Unlabeled case',
         status: caseStatus(test),
       }));
       return { project, cases };
