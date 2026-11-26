@@ -77,11 +77,11 @@ The first command runs all 13 core tests. Chromium opens for the 9 UI cases; API
 | AC-12 | API | A read-only request for an ID outside the positive booking ID range returns `404` with `Not Found`. |
 | AC-13 | API | A read-only booking search for a unique synthetic name returns HTTP `200` and an empty list. |
 
-Deliberately excluded from the core suite: other SauceDemo profiles and browsers, exhaustive field permutations, invalid API writes, and load and security testing. API writes are limited to a booking created by the current test. The optional generator is maintained on the separate `feat/playwright-test-generator` branch and does not run in core CI.
+The core suite does not cover other SauceDemo profiles or browsers, exhaustive field combinations, invalid API writes, load testing, or security testing. API writes are limited to a booking created by the current test. The [optional generator](https://github.com/karapuz1337/automation-all-right-test/tree/feat/playwright-test-generator/bonus#readme) runs separately from core CI.
 
 ## Verified locally
 
-On November 25, 2026, the updated suite passed all 13 cases locally in a headed run (9 UI, 4 API). The final API rerun also passed all four cases. The earlier 12-case snapshot passed independently in a separate QA agent session and on [GitHub Actions](https://github.com/karapuz1337/automation-all-right-test/actions/runs/45603673186); that run predates AC-13.
+On November 25, 2026, all 13 cases passed locally in a headed run (9 UI, 4 API). The final API rerun also passed all four cases. The same 13 cases passed on [GitHub Actions](https://github.com/karapuz1337/automation-all-right-test/actions/runs/45886301140) on November 26. The downloaded report matched GitHub's checksum and showed no failures, skips, or retries.
 
 ## GitHub Actions report
 
@@ -93,10 +93,10 @@ When tests generate results, the workflow publishes the summary and HTML artifac
 
 ### SD-01: Checkout accepts a postal code containing only spaces
 
-- **Severity:** Low. Checkout validation lets a missing postal code through to the overview; order completion with that value was not tested.
+- **Severity:** Low. Checkout accepts a whitespace-only postal code and advances to the overview. The test did not attempt to complete the order with that value.
 - **Environment:** Public SauceDemo, `standard_user`, headed Chromium on Windows, November 25, 2026.
 - **Steps:** Add Sauce Labs Backpack to the cart and start checkout. Enter `Demo` and `Tester` for the names. Leave the postal code empty and click **Continue** to confirm the required-field error. Enter three spaces in that field and click **Continue** again.
-- **Expected:** Stay on checkout information and show `Error: Postal Code is required`. Spaces alone do not provide a postal code.
+- **Expected:** The checkout information page stays open and shows `Error: Postal Code is required`. Spaces alone do not provide a postal code.
 - **Actual:** The empty value was rejected. Three spaces advanced to checkout overview (`/checkout-step-two.html`). Reproduced twice in fresh browser contexts. The order was not submitted.
 
 The [reproduction test](tests/ui/checkout-postal-code.repro.spec.ts) asserts the expected behavior. It fails while the defect is present and is excluded from the default suite and CI.

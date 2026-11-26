@@ -1,9 +1,18 @@
 /node_modules/
 /.runtime/
+# Local editor and agent state
+/.idea/
 /.factory/
+.DS_Store
+Thumbs.db
+
+# Generated Playwright output
 /test-results/
 /playwright-report/
-/playwright-report.zip
+/blob-report/
+/playwright-report*.zip
+
+# Local configuration
 /.env
 /.env.*
 !/.env.example

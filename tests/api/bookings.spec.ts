@@ -126,7 +126,7 @@ test('AC-10 owns a booking through create, update, read and delete', async ({ ba
           await deleteBooking(id);
         });
       } catch {
-        // The failed step and annotation record cleanup without masking the original error.
+        // The failed step and annotation record the cleanup failure without masking the original error.
       }
     }
     throw error;

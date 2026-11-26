@@ -1,7 +1,16 @@
 # Agent instructions
 
-- Keep `ui` (AC-01–09) and `api` (AC-10–13) separate. Give each test an acceptance ID and make it runnable alone. Use fresh Playwright contexts, explicit setup and assertions, stable locators, and Playwright's built-in waits. Do not rely on another test's login, cart, or booking.
-- Use synthetic data and documented public demo credentials. Only update, delete, or clean up the validated ID returned by the current test's successful create. If creation is ambiguous and no ID was recovered, report it; do not search for a cleanup target or retry the write. Keep cleanup bounded and preserve the original failure in the report.
-- Assert the expected validation behavior, not just any failure. Treat timeouts, rate limits, and service errors separately. Never include issued tokens, cookies, raw auth payloads, private credentials, or personal data in logs, reports, or examples.
-- For independent verification, install from the lockfile on Node 24, type-check, list discovery per project, run each affected ID alone, then run the full suite. For example: `npm test -- --project=ui --grep '\bAC-08\b'`. Record what actually ran and preserve the report. Do not treat a local run as evidence of a hosted push run.
-- Stay within the assigned scope. Do not publish changes without approval or add optional bonus work to the core suite. Local adapted hooks and agent definitions are untracked under `.factory/`; they are not prerequisites for running the suite.
+## Scope
+
+- Keep SauceDemo UI cases (AC-01–09) and Restful Booker API cases (AC-10–13) in separate Playwright projects. Keep the SD-01 reproduction opt-in and the generator out of core test discovery.
+- Give each core case an acceptance ID and make it runnable on its own. Use fresh browser contexts, explicit setup and assertions, stable locators, and Playwright's built-in waits. Do not rely on another test's login, cart, or booking.
+
+## Data and evidence
+
+- Use only synthetic test data and documented public demo credentials. Update or delete only the validated booking ID returned by the current test's successful creation request. If creation is ambiguous and no ID was recovered, report it. Do not search for a cleanup target or retry the write. Keep cleanup bounded and preserve the original failure.
+- Assert the expected validation behavior. Distinguish application responses from timeouts, rate limits, and service errors. Do not put issued tokens, cookies, raw authentication payloads, private credentials, or personal data in logs, reports, or examples.
+
+## Verification
+
+- Use Node 24 and install from the lockfile with `npm ci`. Run `npm run lint`, `npm run typecheck`, and `npm test -- --list`. Run each affected case in isolation, for example `npm test -- --project=ui --grep AC-08`, then run `npm test`.
+- Record the checks and outcomes you observed. Keep local artifacts under `.runtime/` and verify hosted results against the exact commit. Do not publish without approval. Local `.factory/` settings are not required to run the suite.
