@@ -1,0 +1,8 @@
+Title: Checkout requires a postal code
+Steps:
+1. Open the public SauceDemo login page and sign in with the standard demo account.
+2. Add the Sauce Labs Backpack to the cart.
+3. Open the shopping cart.
+4. Begin checkout.
+5. Fill in synthetic first and last names and submit the form without a postal code.
+Expected result: Checkout stays on the information form and shows `Error: Postal Code is required`.

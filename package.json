@@ -6,6 +6,7 @@
     "node": "24.x"
   },
   "scripts": {
+    "generate-test-case": "node bonus/generate.ts --save",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "npm run lint -- --fix",
     "prepare": "husky",
